@@ -19,9 +19,18 @@ blueprint:
           min: -10000
           max: 0
           unit_of_measurement: W
-    duration:
-      name: Dauer in Minuten
-      description: Die Dauer, für die der Schwellenwert überschritten oder unterschritten werden muss
+    duration_above:
+      name: Dauer in Minuten für Überschreiten
+      description: Die Dauer, für die der Schwellenwert überschritten werden muss
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+    duration_below:
+      name: Dauer in Minuten für Unterschreiten
+      description: Die Dauer, für die der Schwellenwert unterschritten werden muss
       default: 5
       selector:
         number:
@@ -44,12 +53,12 @@ trigger:
     entity_id: !input 'power_sensor'
     above: !input 'threshold_value'
     for:
-      minutes: !input 'duration'
+      minutes: !input 'duration_above'
   - platform: numeric_state
     entity_id: !input 'power_sensor'
     below: !input 'threshold_value'
     for:
-      minutes: !input 'duration'
+      minutes: !input 'duration_below'
 
 action:
   - choose:
