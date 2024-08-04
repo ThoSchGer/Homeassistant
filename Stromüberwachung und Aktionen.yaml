@@ -1,0 +1,65 @@
+# Home Assistant Automation Blueprint: Stromüberwachung und Aktionen
+blueprint:
+  name: Stromüberwachung und Aktionen
+  description: Löst Aktionen aus, wenn der verfügbare Strom für mehr als x Minuten einen bestimmten negativen Wert überschreitet oder unterschreitet.
+  domain: automation
+  input:
+    power_sensor:
+      name: Stromsensor
+      description: Sensor, der den verfügbaren Strom misst (negativer Wert)
+      selector:
+        entity:
+          domain: sensor
+    threshold_value:
+      name: Schwellenwert
+      description: Der Schwellenwert des verfügbaren Stroms (negativer Wert)
+      default: -1000
+      selector:
+        number:
+          min: -10000
+          max: 0
+          unit_of_measurement: W
+    duration:
+      name: Dauer in Minuten
+      description: Die Dauer, für die der Schwellenwert überschritten oder unterschritten werden muss
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+    above_action:
+      name: Aktion bei Überschreiten
+      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert überschreitet (weniger negativ)
+      selector:
+        action:
+    below_action:
+      name: Aktion bei Unterschreiten
+      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert unterschreitet (mehr negativ)
+      selector:
+        action:
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input 'power_sensor'
+    above: !input 'threshold_value'
+    for:
+      minutes: !input 'duration'
+  - platform: numeric_state
+    entity_id: !input 'power_sensor'
+    below: !input 'threshold_value'
+    for:
+      minutes: !input 'duration'
+
+action:
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input 'power_sensor'
+            above: !input 'threshold_value'
+        sequence: !input 'above_action'
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input 'power_sensor'
+            below: !input 'threshold_value'
+        sequence: !input 'below_action'
