@@ -58,26 +58,27 @@ blueprint:
         action:
 
 trigger:
-  - platform: numeric_state
-    entity_id: !input 'power_sensor'
-    above: !input 'threshold_on'
-    for:
-      minutes: !input 'duration_above'
-  - platform: numeric_state
-    entity_id: !input 'power_sensor'
-    below: !input 'threshold_off'
-    for:
-      minutes: !input 'duration_below'
+  - platform: time_pattern
+    minutes: "/5"
+
+condition:
+  - condition: template
+    value_template: >
+      {% set power = states('sensor.' + power_sensor.split('.')[1]) | float %}
+      {{ (power > threshold_on and (now() - state_attr('automation.stromueberwachung_und_aktionen', 'last_triggered')).total_seconds() / 60.0) > duration_above or
+         (power < threshold_off and (now() - state_attr('automation.stromueberwachung_und_aktionen', 'last_triggered')).total_seconds() / 60.0) > duration_below }}
 
 action:
   - choose:
       - conditions:
-          - condition: numeric_state
-            entity_id: !input 'power_sensor'
-            above: !input 'threshold_on'
+          - condition: template
+            value_template: >
+              {% set power = states('sensor.' + power_sensor.split('.')[1]) | float %}
+              {{ power > threshold_on }}
         sequence: !input 'above_action'
       - conditions:
-          - condition: numeric_state
-            entity_id: !input 'power_sensor'
-            below: !input 'threshold_off'
+          - condition: template
+            value_template: >
+              {% set power = states('sensor.' + power_sensor.split('.')[1]) | float %}
+              {{ power < threshold_off }}
         sequence: !input 'below_action'
