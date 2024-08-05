@@ -10,10 +10,19 @@ blueprint:
       selector:
         entity:
           domain: sensor
-    threshold_value:
-      name: Schwellenwert
-      description: Der Schwellenwert des verfügbaren Stroms (negativer Wert)
+    threshold_on:
+      name: Schwellenwert Einschalten
+      description: Der Schwellenwert des verfügbaren Stroms zum Einschalten (negativer Wert)
       default: -1000
+      selector:
+        number:
+          min: -10000
+          max: 0
+          unit_of_measurement: W
+    threshold_off:
+      name: Schwellenwert Ausschalten
+      description: Der Schwellenwert des verfügbaren Stroms zum Ausschalten (negativer Wert)
+      default: -500
       selector:
         number:
           min: -10000
@@ -39,24 +48,24 @@ blueprint:
           unit_of_measurement: minutes
     above_action:
       name: Aktion bei Überschreiten
-      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert überschreitet (weniger negativ)
+      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert zum Einschalten überschreitet (weniger negativ)
       selector:
         action:
     below_action:
       name: Aktion bei Unterschreiten
-      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert unterschreitet (mehr negativ)
+      description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert zum Ausschalten unterschreitet (mehr negativ)
       selector:
         action:
 
 trigger:
   - platform: numeric_state
     entity_id: !input 'power_sensor'
-    above: !input 'threshold_value'
+    above: !input 'threshold_on'
     for:
       minutes: !input 'duration_above'
   - platform: numeric_state
     entity_id: !input 'power_sensor'
-    below: !input 'threshold_value'
+    below: !input 'threshold_off'
     for:
       minutes: !input 'duration_below'
 
@@ -65,10 +74,10 @@ action:
       - conditions:
           - condition: numeric_state
             entity_id: !input 'power_sensor'
-            above: !input 'threshold_value'
+            above: !input 'threshold_on'
         sequence: !input 'above_action'
       - conditions:
           - condition: numeric_state
             entity_id: !input 'power_sensor'
-            below: !input 'threshold_value'
+            below: !input 'threshold_off'
         sequence: !input 'below_action'
