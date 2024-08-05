@@ -6,13 +6,13 @@ blueprint:
   input:
     power_sensor:
       name: Stromsensor
-      description: Sensor, der den verfügbaren Strom misst (negativer Wert)
+      description: Smartmeter
       selector:
         entity:
           domain: sensor
     threshold_on:
-      name: Schwellenwert Einschalten
-      description: Der Schwellenwert des verfügbaren Stroms zum Einschalten (negativer Wert)
+      name: Schwellenwert Überschreiten
+      description: Der Schwellenwert des verfügbaren Stroms zum Deaktivieren (negativer Wert)
       default: -1000
       selector:
         number:
@@ -20,16 +20,16 @@ blueprint:
           max: 0
           unit_of_measurement: W
     threshold_off:
-      name: Schwellenwert Ausschalten
-      description: Der Schwellenwert des verfügbaren Stroms zum Ausschalten (negativer Wert)
-      default: -500
+      name: Schwellenwert Unterschreiten
+      description: Der Schwellenwert des verfügbaren Stroms zum Aktivieren (negativer Wert)
+      default: -4000
       selector:
         number:
           min: -10000
           max: 0
           unit_of_measurement: W
     duration_above:
-      name: Dauer in Minuten für Überschreiten
+      name: Dauer in Minuten für Deaktivieren
       description: Die Dauer, für die der Schwellenwert überschritten werden muss
       default: 5
       selector:
@@ -38,7 +38,7 @@ blueprint:
           max: 60
           unit_of_measurement: minutes
     duration_below:
-      name: Dauer in Minuten für Unterschreiten
+      name: Dauer in Minuten für Aktivieren
       description: Die Dauer, für die der Schwellenwert unterschritten werden muss
       default: 5
       selector:
@@ -47,12 +47,12 @@ blueprint:
           max: 60
           unit_of_measurement: minutes
     above_action:
-      name: Aktion bei Überschreiten
+      name: Aktion für Deaktivieren
       description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert zum Einschalten überschreitet (weniger negativ)
       selector:
         action:
     below_action:
-      name: Aktion bei Unterschreiten
+      name: Aktion für Aktivieren
       description: Aktion, die ausgeführt wird, wenn der verfügbare Strom den negativen Schwellenwert zum Ausschalten unterschreitet (mehr negativ)
       selector:
         action:

@@ -1,1 +1,2 @@
-# Homeassistant
+# Homeassistant Blaupausen
+Blaupausen für meinen Homeassistant
