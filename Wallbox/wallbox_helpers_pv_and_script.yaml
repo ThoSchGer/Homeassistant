@@ -1,0 +1,99 @@
+input_select:
+  lademodus_wallbox1:
+    name: Lademodus Wallbox 1
+    options:
+      - Deaktiviert
+      - Überschussladen
+      - Manuelles Laden
+      - Manuelles Schnellladen
+
+  zustand_wallbox1:
+    name: Zustand Wallbox 1
+    options:
+      - Frei
+      - Angeschlossen
+      - Ladevorgang
+      - Ladevorgang beendet
+
+  status_uberschussladen_wallbox1:
+    name: Status Überschussladen Wallbox 1
+    options:
+      - Idle
+      - Laden
+      - Pause
+
+input_boolean:
+  wallbox_freigabe:
+    name: Wallbox Freigabe (PV-Modus)
+    icon: mdi:solar-power
+
+template:
+  - sensor:
+      - name: "pv_ueberschuss"
+        unique_id: pv_ueberschuss
+        unit_of_measurement: "W"
+        state: >
+          {%- set pv = states('sensor.pv_gesamtleistung') | float(0) -%}
+          {%- set haus = states('sensor.hausverbrauch_gesamt') | float(0) -%}
+          {{ max(0, pv - haus) }}
+        attributes:
+          kommentar: "Bitte sensor.pv_gesamtleistung und sensor.hausverbrauch_gesamt an deine Installation anpassen."
+
+      - name: "berechneter_moglicher_ladestrom"
+        unique_id: berechneter_moglicher_ladestrom
+        unit_of_measurement: "A"
+        state: >
+          {%- set ueberschuss = states('sensor.pv_ueberschuss') | float(0) -%}
+          {%- set spannung = 230.0 -%}
+          {%- set phasen = 3 -%}
+          {%- set ampere = ueberschuss / (spannung * phasen) -%}
+          {{ max(0, ampere) }}
+        attributes:
+          kommentar: "Wandelt PV-Überschuss in maximal möglichen Ladestrom (3-phasig, 230V) um."
+
+script:
+  wallboxaction:
+    alias: Wallbox Aktion
+    mode: parallel
+    fields:
+      action:
+        description: "Wallbox Aktion (Start, Stop, Pause, Resume, SetChargingCurrent)"
+      chargingCurrent:
+        description: "Ladestrom in Ampere (optional für SetChargingCurrent)"
+    sequence:
+      - choose:
+          - conditions: "{{ action == 'Start' }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: wallbox/cmd
+                  payload: '{"cmd":"start"}'
+
+          - conditions: "{{ action == 'Stop' }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: wallbox/cmd
+                  payload: '{"cmd":"stop"}'
+
+          - conditions: "{{ action == 'Pause' }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: wallbox/cmd
+                  payload: '{"cmd":"pause"}'
+
+          - conditions: "{{ action == 'Resume' }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: wallbox/cmd
+                  payload: '{"cmd":"resume"}'
+
+          - conditions: "{{ action == 'SetChargingCurrent' }}"
+            sequence:
+              - service: mqtt.publish
+                data:
+                  topic: wallbox/cmd
+                  payload: >
+                    {"cmd":"setCurrent","amp":{{ chargingCurrent | int }}}

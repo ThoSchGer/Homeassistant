@@ -1,0 +1,376 @@
+blueprint:
+  name: Wallbox Lademodus State Machine
+  description: >
+    Steuert eine Wallbox in den Modi Deaktiviert, Überschussladen,
+    Manuelles Laden und Manuelles Schnellladen inklusive Ladestrom-Nachführung.
+    Basierend auf Lademodus, Wallbox-Zustand, Freigabe und berechnetem Ladestrom.
+  domain: automation
+  source_url: https://example.local/blueprints/wallbox_lademodus_statemachine
+
+  input:
+    wallbox_mode:
+      name: Input Select Lademodus Wallbox
+      description: Entität mit den Optionen z. B. Deaktiviert, Überschussladen, Manuelles Laden, Manuelles Schnellladen.
+      selector:
+        entity:
+          domain: input_select
+
+    wallbox_state:
+      name: Input Select Zustand Wallbox
+      description: Entität mit Zuständen der Wallbox (z. B. Angeschlossen, Ladevorgang, Ladevorgang beendet, Frei).
+      selector:
+        entity:
+          domain: input_select
+
+    surplus_status:
+      name: Input Select Status Überschussladen
+      description: Statusmaschine für Überschussladen (z. B. Idle, Laden, Pause).
+      selector:
+        entity:
+          domain: input_select
+
+    wallbox_release:
+      name: Boolean Wallbox Freigabe
+      description: Freigabe-Bool für die Wallbox (z. B. bei genügend PV-Überschuss).
+      selector:
+        entity:
+          domain: input_boolean
+
+    charging_current_sensor:
+      name: Sensor berechneter möglicher Ladestrom
+      description: Sensor mit dem berechneten möglichen Ladestrom in Ampere.
+      selector:
+        entity:
+          domain: sensor
+
+    wallbox_script:
+      name: Script für Wallboxaktionen
+      description: Script, das Aktionen wie Start, Stop, Pause, Resume, SetChargingCurrent entgegennimmt.
+      selector:
+        entity:
+          domain: script
+
+    min_charging_current:
+      name: Minimaler Ladestrom (A)
+      description: Unterer Wert für manuellen Lademodus.
+      default: 6
+      selector:
+        number:
+          min: 1
+          max: 32
+          unit_of_measurement: A
+          mode: box
+
+    max_charging_current:
+      name: Maximaler Ladestrom (A)
+      description: Oberer Wert für Schnellladen.
+      default: 16
+      selector:
+        number:
+          min: 1
+          max: 32
+          unit_of_measurement: A
+          mode: box
+
+mode: single
+alias: Wallbox Lademodus State Machine
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+  - platform: state
+    entity_id: !input wallbox_mode
+
+variables:
+  MINIMUM_CHARGING_CURRENT: !input min_charging_current
+  MAXIMUM_CHARGING_CURRENT: !input max_charging_current
+  charging_current_entity: !input charging_current_sensor
+  ChargingCurrent: "{{ states(charging_current_entity) | float(0) }}"
+
+action:
+  - choose:
+      # ---------------------------------------------------
+      # 1) Lademodus: Deaktiviert / unavailable / unknown
+      # ---------------------------------------------------
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input wallbox_mode
+                state: "Deaktiviert"
+              - condition: state
+                entity_id: !input wallbox_mode
+                state: "unavailable"
+              - condition: state
+                entity_id: !input wallbox_mode
+                state: "unknown"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Ladevorgang"
+                sequence:
+                  - service: script.turn_on
+                    target:
+                      entity_id: !input wallbox_script
+                    data:
+                      variables:
+                        action: "Stop"
+            default: []
+          - service: input_select.select_option
+            target:
+              entity_id: !input surplus_status
+            data:
+              option: "Idle"
+
+      # ---------------------------------------------------
+      # 2) Lademodus: Überschussladen
+      # ---------------------------------------------------
+      - conditions:
+          - condition: state
+            entity_id: !input wallbox_mode
+            state: "Überschussladen"
+        sequence:
+          - choose:
+              # 2a) Freigabe AUS -> Pause oder Idle / Stop
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_release
+                    state: "off"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Ladevorgang"
+                        sequence:
+                          - service: input_select.select_option
+                            target:
+                              entity_id: !input surplus_status
+                            data:
+                              option: "Pause"
+                          - service: script.turn_on
+                            target:
+                              entity_id: !input wallbox_script
+                            data:
+                              variables:
+                                action: "Pause"
+                      - conditions:
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Ladevorgang beendet"
+                        sequence: []
+                      - conditions:
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Frei"
+                        sequence:
+                          - service: input_select.select_option
+                            target:
+                              entity_id: !input surplus_status
+                            data:
+                              option: "Idle"
+                          - service: script.turn_on
+                            target:
+                              entity_id: !input wallbox_script
+                            data:
+                              variables:
+                                action: "Stop"
+
+              # 2b) Freigabe AN -> Starten / Fortsetzen inkl. Strom setzen
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_release
+                    state: "on"
+                sequence:
+                  - choose:
+                      # Starten: Idle + Angeschlossen
+                      - conditions:
+                          - condition: state
+                            entity_id: !input surplus_status
+                            state: "Idle"
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Angeschlossen"
+                        sequence:
+                          - service: input_select.select_option
+                            target:
+                              entity_id: !input surplus_status
+                            data:
+                              option: "Laden"
+                          - service: script.turn_on
+                            target:
+                              entity_id: !input wallbox_script
+                            data:
+                              variables:
+                                action: "Start"
+
+                      # Resume: Pause + Ladevorgang beendet
+                      - conditions:
+                          - condition: state
+                            entity_id: !input surplus_status
+                            state: "Pause"
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Ladevorgang beendet"
+                        sequence:
+                          - service: input_select.select_option
+                            target:
+                              entity_id: !input surplus_status
+                            data:
+                              option: "Laden"
+                          - service: script.turn_on
+                            target:
+                              entity_id: !input wallbox_script
+                            data:
+                              variables:
+                                action: "Resume"
+
+                      # Resume: Pause + Ladevorgang
+                      - conditions:
+                          - condition: state
+                            entity_id: !input surplus_status
+                            state: "Pause"
+                          - condition: state
+                            entity_id: !input wallbox_state
+                            state: "Ladevorgang"
+                        sequence:
+                          - service: input_select.select_option
+                            target:
+                              entity_id: !input surplus_status
+                            data:
+                              option: "Laden"
+                    default: []
+                  - service: script.turn_on
+                    target:
+                      entity_id: !input wallbox_script
+                    data:
+                      variables:
+                        action: "SetChargingCurrent"
+                        chargingCurrent: "{{ ChargingCurrent }}"
+
+              # 2c) Nur Stromnachführung (Freigabe an und Ladevorgang)
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_release
+                    state: "on"
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Ladevorgang"
+                sequence:
+                  - service: script.turn_on
+                    target:
+                      entity_id: !input wallbox_script
+                    data:
+                      variables:
+                        action: "SetChargingCurrent"
+                        chargingCurrent: "{{ ChargingCurrent }}"
+
+              # 2d) Ladevorgang beendet & nicht Pause -> Idle setzen
+              - conditions:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: !input surplus_status
+                        state: "Pause"
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Ladevorgang beendet"
+                sequence:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input surplus_status
+                    data:
+                      option: "Idle"
+
+      # ---------------------------------------------------
+      # 3) Lademodus: Manuelles Laden oder Manuelles Schnellladen
+      # ---------------------------------------------------
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input wallbox_mode
+                state: "Manuelles Laden"
+              - condition: state
+                entity_id: !input wallbox_mode
+                state: "Manuelles Schnellladen"
+        sequence:
+          - choose:
+              # Angeschlossen -> Start + MIN/MAX
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Angeschlossen"
+                sequence:
+                  - service: script.turn_on
+                    target:
+                      entity_id: !input wallbox_script
+                    data:
+                      variables:
+                        action: "Start"
+                  - if:
+                      - condition: state
+                        entity_id: !input wallbox_mode
+                        state: "Manuelles Schnellladen"
+                    then:
+                      - service: script.turn_on
+                        target:
+                          entity_id: !input wallbox_script
+                        data:
+                          variables:
+                            action: "SetChargingCurrent"
+                            chargingCurrent: "{{ MAXIMUM_CHARGING_CURRENT }}"
+                    else:
+                      - service: script.turn_on
+                        target:
+                          entity_id: !input wallbox_script
+                        data:
+                          variables:
+                            action: "SetChargingCurrent"
+                            chargingCurrent: "{{ MINIMUM_CHARGING_CURRENT }}"
+
+              # Ladevorgang -> nur Ladestrom MIN/MAX
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Ladevorgang"
+                sequence:
+                  - if:
+                      - condition: state
+                        entity_id: !input wallbox_mode
+                        state: "Manuelles Schnellladen"
+                    then:
+                      - service: script.turn_on
+                        target:
+                          entity_id: !input wallbox_script
+                        data:
+                          variables:
+                            action: "SetChargingCurrent"
+                            chargingCurrent: "{{ MAXIMUM_CHARGING_CURRENT }}"
+                    else:
+                      - service: script.turn_on
+                        target:
+                          entity_id: !input wallbox_script
+                        data:
+                          variables:
+                            action: "SetChargingCurrent"
+                            chargingCurrent: "{{ MINIMUM_CHARGING_CURRENT }}"
+
+              # Ladevorgang beendet -> Lademodus auf Deaktiviert
+              - conditions:
+                  - condition: state
+                    entity_id: !input wallbox_state
+                    state: "Ladevorgang beendet"
+                sequence:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input wallbox_mode
+                    data:
+                      option: "Deaktiviert"
+            default: []
+          - service: input_select.select_option
+            target:
+              entity_id: !input surplus_status
+            data:
+              option: "Idle"

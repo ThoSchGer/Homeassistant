@@ -1,0 +1,303 @@
+alias: Statemachine Laden Wallbox1
+description: ""
+triggers:
+  - trigger: time_pattern
+    minutes: /5
+  - trigger: state
+    entity_id:
+      - input_select.lademodus_wallbox1
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: input_select.lademodus_wallbox1
+                state:
+                  - Deaktiviert
+              - condition: state
+                entity_id: input_select.lademodus_wallbox1
+                state:
+                  - unavailable
+              - condition: state
+                entity_id: input_select.lademodus_wallbox1
+                state:
+                  - unknown
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Ladevorgang
+                sequence:
+                  - action: script.wallboxaction
+                    metadata: {}
+                    data:
+                      action: Stop
+                    alias: Wallbox Stop
+          - action: input_select.select_option
+            metadata: {}
+            data:
+              option: Idle
+            target:
+              entity_id: input_select.status_uberschussladen_wallbox1
+        alias: Deaktivieren
+      - conditions:
+          - condition: state
+            entity_id: input_select.lademodus_wallbox1
+            state:
+              - Überschussladen
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: input_boolean.wallbox_freigabe
+                    state:
+                      - "off"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Ladevorgang
+                        sequence:
+                          - action: input_select.select_option
+                            metadata: {}
+                            data:
+                              option: Pause
+                            target:
+                              entity_id: input_select.status_uberschussladen_wallbox1
+                            alias: Setze Status Pause bei Status Überschussladen
+                          - action: script.wallboxaction
+                            metadata: {}
+                            data:
+                              action: Pause
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Ladevorgang beendet
+                        sequence: []
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Frei
+                        sequence:
+                          - alias: Setze Status Pause bei Status Überschussladen
+                            action: input_select.select_option
+                            metadata: {}
+                            data:
+                              option: Idle
+                            target:
+                              entity_id: input_select.status_uberschussladen_wallbox1
+                          - action: script.wallboxaction
+                            metadata: {}
+                            data:
+                              action: Stop
+                alias: Definierte Pause aufgrund nicht genügend Leistung
+              - conditions:
+                  - condition: state
+                    entity_id: input_boolean.wallbox_freigabe
+                    state:
+                      - "on"
+                sequence:
+                  - alias: Starten oder Fortsetzen
+                    choose:
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.status_uberschussladen_wallbox1
+                            state:
+                              - Idle
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Angeschlossen
+                        sequence:
+                          - alias: Setze Status Laden bei Status Überschussladen
+                            action: input_select.select_option
+                            metadata: {}
+                            data:
+                              option: Laden
+                            target:
+                              entity_id: input_select.status_uberschussladen_wallbox1
+                          - action: script.wallboxaction
+                            metadata: {}
+                            data:
+                              action: Start
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.status_uberschussladen_wallbox1
+                            state:
+                              - Pause
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Ladevorgang beendet
+                        sequence:
+                          - alias: Setze Status Laden bei Status Überschussladen
+                            action: input_select.select_option
+                            metadata: {}
+                            data:
+                              option: Laden
+                            target:
+                              entity_id: input_select.status_uberschussladen_wallbox1
+                          - action: script.wallboxaction
+                            metadata: {}
+                            data:
+                              action: Resume
+                      - conditions:
+                          - condition: state
+                            entity_id: input_select.status_uberschussladen_wallbox1
+                            state:
+                              - Pause
+                          - condition: state
+                            entity_id: input_select.zustand_wallbox1
+                            state:
+                              - Ladevorgang
+                        sequence:
+                          - alias: Setze Status Laden bei Status Überschussladen
+                            action: input_select.select_option
+                            metadata: {}
+                            data:
+                              option: Laden
+                            target:
+                              entity_id: input_select.status_uberschussladen_wallbox1
+                  - action: script.wallboxaction
+                    metadata: {}
+                    data:
+                      action: SetChargingCurrent
+                      chargingCurrent: "{{ ChargingCurrent }}"
+                    alias: Setze Ladestrom
+                alias: Starte Ladevorgang
+              - conditions:
+                  - condition: state
+                    entity_id: input_boolean.wallbox_freigabe
+                    state:
+                      - "on"
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Ladevorgang
+                sequence:
+                  - action: script.wallboxaction
+                    metadata: {}
+                    data:
+                      action: SetChargingCurrent
+                      chargingCurrent: "{{ ChargingCurrent }}"
+                    alias: Setze Ladestrom
+                alias: Stromnachführung
+              - conditions:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: input_select.status_uberschussladen_wallbox1
+                        state:
+                          - Pause
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Ladevorgang beendet
+                sequence:
+                  - alias: Setze Status Laden bei Status Überschussladen
+                    action: input_select.select_option
+                    metadata: {}
+                    data:
+                      option: Idle
+                    target:
+                      entity_id: input_select.status_uberschussladen_wallbox1
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: input_select.lademodus_wallbox1
+                state:
+                  - Manuelles Laden
+              - condition: state
+                entity_id: input_select.lademodus_wallbox1
+                state:
+                  - Manuelles Schnellladen
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Angeschlossen
+                sequence:
+                  - action: script.wallboxaction
+                    metadata: {}
+                    data:
+                      action: Start
+                  - if:
+                      - condition: state
+                        entity_id: input_select.lademodus_wallbox1
+                        state:
+                          - Manuelles Schnellladen
+                    then:
+                      - alias: Setze Ladestrom MAXIMUM
+                        action: script.wallboxaction
+                        metadata: {}
+                        data:
+                          action: SetChargingCurrent
+                          chargingCurrent: "{{ MAXIMUM_CHARGING_CURRENT }}"
+                    else:
+                      - action: script.wallboxaction
+                        metadata: {}
+                        data:
+                          action: SetChargingCurrent
+                          chargingCurrent: "{{ MINIMUM_CHARGING_CURRENT }}"
+                        alias: Setze Ladestrom MINIMUM
+              - conditions:
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Ladevorgang
+                sequence:
+                  - if:
+                      - condition: state
+                        entity_id: input_select.lademodus_wallbox1
+                        state:
+                          - Manuelles Schnellladen
+                    then:
+                      - action: script.wallboxaction
+                        metadata: {}
+                        data:
+                          action: SetChargingCurrent
+                          chargingCurrent: "{{ MAXIMUM_CHARGING_CURRENT }}"
+                        alias: Setze Ladestrom Maximum
+                    else:
+                      - action: script.wallboxaction
+                        metadata: {}
+                        data:
+                          action: SetChargingCurrent
+                          chargingCurrent: "{{ MINIMUM_CHARGING_CURRENT }}"
+                        alias: Setze Ladestrom MINIMUM
+              - conditions:
+                  - condition: state
+                    entity_id: input_select.zustand_wallbox1
+                    state:
+                      - Ladevorgang beendet
+                sequence:
+                  - action: input_select.select_option
+                    metadata: {}
+                    data:
+                      option: Deaktiviert
+                    target:
+                      entity_id: input_select.lademodus_wallbox1
+                    alias: Lademodus auf Deaktiviert
+          - action: input_select.select_option
+            metadata: {}
+            data:
+              option: Idle
+            target:
+              entity_id: input_select.status_uberschussladen_wallbox1
+        alias: Wenn Lademodus Wallbox1 Manuelles Laden oder Schnelladen ist
+variables:
+  MINIMUM_CHARGING_CURRENT: 6
+  MAXIMUM_CHARGING_CURRENT: 16
+  ChargingCurrent: "{{ states('sensor.berechneter_moglicher_ladestrom') | float(0) }}"
+mode: single
