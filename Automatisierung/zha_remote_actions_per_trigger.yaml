@@ -1,9 +1,9 @@
 blueprint:
-  name: ZHA IKEA E1743 – Aktionen pro Trigger (mit Long-Press Loop)
+  name: ZHA Remote – Aktionen pro Event (mit Long-Press Loop, ohne Device-Trigger)
   description: >
-    ZHA Device Trigger Blueprint (IKEA E1743 / ähnliche).
-    Pro Trigger können Sequenzen definiert werden. Long-Press kann in einer Loop
-    wiederholt werden, bis Release kommt (via mode: restart).
+    Blueprint für ZHA Remotes via zha_event (robust gegen Device-Trigger-Validierung).
+    Pro Event (short/long/release up/down, optional offline) können Sequenzen definiert werden.
+    Long-Press kann in einer Loop wiederholt werden, bis Release kommt (mode: restart).
   domain: automation
 
   input:
@@ -13,60 +13,63 @@ blueprint:
         device:
           integration: zha
 
+    # Actions
     on_short_actions:
-      name: Short Press – turn_on
+      name: Short – Up (ON)
       default: []
       selector:
         action: {}
 
     off_short_actions:
-      name: Short Press – turn_off
+      name: Short – Down (OFF)
       default: []
       selector:
         action: {}
 
     up_long_start_actions:
-      name: Long Press (dim_up) – Start (einmalig)
+      name: Long Up – Start (einmalig)
       default: []
       selector:
         action: {}
 
     up_long_loop_actions:
-      name: Long Press (dim_up) – Loop (wiederholt)
+      name: Long Up – Loop (wiederholt)
       default: []
       selector:
         action: {}
 
     up_release_actions:
-      name: Long Release – dim_up
+      name: Up – Release
       default: []
       selector:
         action: {}
 
     down_long_start_actions:
-      name: Long Press (dim_down) – Start (einmalig)
+      name: Long Down – Start (einmalig)
       default: []
       selector:
         action: {}
 
     down_long_loop_actions:
-      name: Long Press (dim_down) – Loop (wiederholt)
+      name: Long Down – Loop (wiederholt)
       default: []
       selector:
         action: {}
 
     down_release_actions:
-      name: Long Release – dim_down
+      name: Down – Release
       default: []
       selector:
         action: {}
 
+    # Optional offline handling (some setups don't emit this via zha_event; leave empty if unused)
     offline_actions:
-      name: Device Offline
+      name: Device Offline (optional)
       default: []
       selector:
         action: {}
 
+    # Loop tuning
     loop_enabled:
       name: Loop aktivieren
       default: true
@@ -94,74 +97,95 @@ blueprint:
           step: 1
           mode: slider
 
+    # Matching strings (defaults are common for IKEA E1743; adjust if your zha_event differs)
+    match_up_short:
+      name: Match – Up Short
+      description: zha_event action string(s), newline-separated. Default: "on"
+      default: "on"
+      selector:
+        text:
+          multiline: true
+
+    match_down_short:
+      name: Match – Down Short
+      description: zha_event action string(s), newline-separated. Default: "off"
+      default: "off"
+      selector:
+        text:
+          multiline: true
+
+    match_up_long:
+      name: Match – Up Long
+      description: newline-separated. Examples: move_with_on_off_0_83, move_with_on_off_MoveMode.Up_83
+      default: |-
+        move_with_on_off_0_83
+        move_with_on_off_MoveMode.Up_83
+      selector:
+        text:
+          multiline: true
+
+    match_down_long:
+      name: Match – Down Long
+      description: newline-separated. Examples: move_1_83, move_MoveMode.Down_83_bitmap8.0_bitmap8.0
+      default: |-
+        move_1_83
+        move_MoveMode.Down_83_bitmap8.0_bitmap8.0
+      selector:
+        text:
+          multiline: true
+
+    match_release:
+      name: Match – Release (Up/Down)
+      description: newline-separated. Defaults: stop_with_on_off, stop
+      default: |-
+        stop_with_on_off
+        stop
+      selector:
+        text:
+          multiline: true
+
 mode: restart
 max_exceeded: silent
 
 trigger:
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_short_press
-    subtype: turn_on
-    id: short_on
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
 
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_short_press
-    subtype: turn_off
-    id: short_off
+variables:
+  # Build a comparable action string like: command + "_" + args joined by "_"
+  action_str: >-
+    {{ trigger.event.data.command ~
+       ( '_' if (trigger.event.data.args is defined and (trigger.event.data.args|length > 0)) else '' ) ~
+       ( trigger.event.data.args|join('_') if (trigger.event.data.args is defined) else '' )
+    }}
 
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_long_press
-    subtype: dim_up
-    id: long_up
-
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_long_release
-    subtype: dim_up
-    id: release_up
-
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_long_press
-    subtype: dim_down
-    id: long_down
-
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: remote_button_long_release
-    subtype: dim_down
-    id: release_down
-
-  - platform: device
-    domain: zha
-    device_id: !input zha_device
-    type: device_offline
-    subtype: device_offline
-    id: device_offline
+  # Convert multiline text inputs to lists
+  up_short_list: "{{ (match_up_short.splitlines() | map('trim') | reject('equalto','') | list) }}"
+  down_short_list: "{{ (match_down_short.splitlines() | map('trim') | reject('equalto','') | list) }}"
+  up_long_list: "{{ (match_up_long.splitlines() | map('trim') | reject('equalto','') | list) }}"
+  down_long_list: "{{ (match_down_long.splitlines() | map('trim') | reject('equalto','') | list) }}"
+  release_list: "{{ (match_release.splitlines() | map('trim') | reject('equalto','') | list) }}"
 
 action:
   - choose:
+      # Short Up
       - conditions:
-          - condition: trigger
-            id: short_on
+          - condition: template
+            value_template: "{{ action_str in up_short_list }}"
         sequence: !input on_short_actions
 
+      # Short Down
       - conditions:
-          - condition: trigger
-            id: short_off
+          - condition: template
+            value_template: "{{ action_str in down_short_list }}"
         sequence: !input off_short_actions
 
+      # Long Up with loop
       - conditions:
-          - condition: trigger
-            id: long_up
+          - condition: template
+            value_template: "{{ action_str in up_long_list }}"
         sequence:
           - sequence: !input up_long_start_actions
           - choose:
@@ -180,14 +204,10 @@ action:
             default:
               - sequence: !input up_long_loop_actions
 
+      # Long Down with loop
       - conditions:
-          - condition: trigger
-            id: release_up
-        sequence: !input up_release_actions
-
-      - conditions:
-          - condition: trigger
-            id: long_down
+          - condition: template
+            value_template: "{{ action_str in down_long_list }}"
         sequence:
           - sequence: !input down_long_start_actions
           - choose:
@@ -206,12 +226,19 @@ action:
             default:
               - sequence: !input down_long_loop_actions
 
+      # Release (we don't distinguish up/down here; mode: restart stops the running loop anyway)
       - conditions:
-          - condition: trigger
-            id: release_down
-        sequence: !input down_release_actions
-
-      - conditions:
-          - condition: trigger
-            id: device_offline
-        sequence: !input offline_actions
+          - condition: template
+            value_template: "{{ action_str in release_list }}"
+        sequence:
+          # You can put both up/down release actions here; often empty is fine.
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ true }}"
+                sequence: !input up_release_actions
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ true }}"
+                sequence: !input down_release_actions
