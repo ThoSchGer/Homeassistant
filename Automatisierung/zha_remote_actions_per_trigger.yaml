@@ -1,0 +1,146 @@
+blueprint:
+  name: ZHA Remote – Aktionen pro Trigger (IKEA E1743 kompatibel)
+  description: >
+    Blueprint für ZHA Device Trigger. Für jeden Trigger (kurz/long/release hoch/runter + offline)
+    können eine oder mehrere Aktionen konfiguriert werden.
+  domain: automation
+  input:
+    zha_device:
+      name: ZHA Gerät
+      description: Das Zigbee-Gerät (z. B. IKEA E1743) aus der ZHA-Integration.
+      selector:
+        device:
+          integration: zha
+
+    action_short_on:
+      name: Kurz drücken (turn_on)
+      default: []
+      selector:
+        action: {}
+
+    action_short_off:
+      name: Kurz drücken (turn_off)
+      default: []
+      selector:
+        action: {}
+
+    action_long_up:
+      name: Lang drücken (dim_up)
+      default: []
+      selector:
+        action: {}
+
+    action_release_up:
+      name: Loslassen nach lang (dim_up release)
+      default: []
+      selector:
+        action: {}
+
+    action_long_down:
+      name: Lang drücken (dim_down)
+      default: []
+      selector:
+        action: {}
+
+    action_release_down:
+      name: Loslassen nach lang (dim_down release)
+      default: []
+      selector:
+        action: {}
+
+    action_device_offline:
+      name: Gerät offline
+      description: Optional – wird ausgeführt, wenn das Gerät als offline erkannt wird.
+      default: []
+      selector:
+        action: {}
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_short_press
+    subtype: turn_on
+    id: short_on
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_short_press
+    subtype: turn_off
+    id: short_off
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_long_press
+    subtype: dim_up
+    id: long_up
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_long_release
+    subtype: dim_up
+    id: release_up
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_long_press
+    subtype: dim_down
+    id: long_down
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: remote_button_long_release
+    subtype: dim_down
+    id: release_down
+
+  - platform: device
+    domain: zha
+    device_id: !input zha_device
+    type: device_offline
+    subtype: device_offline
+    id: device_offline
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: short_on
+        sequence: !input action_short_on
+
+      - conditions:
+          - condition: trigger
+            id: short_off
+        sequence: !input action_short_off
+
+      - conditions:
+          - condition: trigger
+            id: long_up
+        sequence: !input action_long_up
+
+      - conditions:
+          - condition: trigger
+            id: release_up
+        sequence: !input action_release_up
+
+      - conditions:
+          - condition: trigger
+            id: long_down
+        sequence: !input action_long_down
+
+      - conditions:
+          - condition: trigger
+            id: release_down
+        sequence: !input action_release_down
+
+      - conditions:
+          - condition: trigger
+            id: device_offline
+        sequence: !input action_device_offline
