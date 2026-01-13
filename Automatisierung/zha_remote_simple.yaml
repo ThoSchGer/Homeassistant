@@ -88,14 +88,38 @@ mode: restart
 max_exceeded: silent
 
 trigger:
+  # Wir triggern nur auf die 4 relevanten Commands.
+  # Release (stop_with_on_off) wird NICHT als Trigger verwendet,
+  # sondern innerhalb des Long-Press-Loops per wait_for_trigger abgefangen.
   - platform: event
     event_type: zha_event
     event_data:
       device_id: !input zha_device
+      command: "on"
+
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
+      command: "off"
+
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
+      command: "move_with_on_off"
+
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
+      command: "move"
 
 variables:
   command: "{{ trigger.event.data.command }}"
-  args: "{{ trigger.event.data.args | default([]) }}"
+  # Achtung: args kann in Traces als String-Repräsentation erscheinen.
+  # Für die Richtung verwenden wir daher params.move_mode (0=UP, 1=DOWN).
+  move_mode: "{{ trigger.event.data.params.move_mode | default(-1) | int }}"
   debug_mode_var: !input debug_mode
   loop_max_repeats: !input loop_max_repeats
 
@@ -110,8 +134,8 @@ action:
           message: >
             ZHA Remote Event:
             Command: {{ command }}
-            Args: {{ args }}
-            Args[0]: {{ args[0] if args | length > 0 else 'none' }}
+            Args: {{ trigger.event.data.args | default([]) }}
+            MoveMode: {{ move_mode }}
           level: warning
 
   # === Event Verarbeitung ===
@@ -131,21 +155,41 @@ action:
       # Langer Tastendruck UP (move_with_on_off mit args[0]=0)
       - conditions:
           - condition: template
-            value_template: "{{ command == 'move_with_on_off' and args | length > 0 and args[0] | int == 0 }}"
+            value_template: "{{ command == 'move_with_on_off' and (move_mode | int) == 0 }}"
         sequence:
           - repeat:
-              while:
+              sequence:
+                - sequence: !input long_up_action
+                - wait_for_trigger:
+                    - platform: event
+                      event_type: zha_event
+                      event_data:
+                        device_id: !input zha_device
+                        command: "stop_with_on_off"
+                  timeout:
+                    milliseconds: !input loop_delay_ms
+                  continue_on_timeout: true
+              until:
                 - condition: template
-                  value_template: "{{ repeat.index <= loop_max_repeats }}"
-              sequence: !input long_up_action
+                  value_template: "{{ wait.trigger is not none or repeat.index >= loop_max_repeats }}"
 
       # Langer Tastendruck DOWN (move mit args[0]=1)
       - conditions:
           - condition: template
-            value_template: "{{ command == 'move' and args | length > 0 and args[0] | int == 1 }}"
+            value_template: "{{ command == 'move' and (move_mode | int) == 1 }}"
         sequence:
           - repeat:
-              while:
+              sequence:
+                - sequence: !input long_down_action
+                - wait_for_trigger:
+                    - platform: event
+                      event_type: zha_event
+                      event_data:
+                        device_id: !input zha_device
+                        command: "stop_with_on_off"
+                  timeout:
+                    milliseconds: !input loop_delay_ms
+                  continue_on_timeout: true
+              until:
                 - condition: template
-                  value_template: "{{ repeat.index <= loop_max_repeats }}"
-              sequence: !input long_down_action
+                  value_template: "{{ wait.trigger is not none or repeat.index >= loop_max_repeats }}"
