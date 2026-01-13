@@ -36,7 +36,7 @@ blueprint:
       name: Langer Tastendruck UP
       description: >
         Aktion beim langen Drücken der oberen Taste (z.B. Helligkeit erhöhen).
-        Wird einmalig beim Drücken ausgeführt.
+        Wird wiederholt ausgeführt während die Taste gedrückt bleibt.
         Für Dimmen verwende: light.turn_on mit brightness_step_pct: 10
       default: []
       selector:
@@ -46,11 +46,35 @@ blueprint:
       name: Langer Tastendruck DOWN
       description: >
         Aktion beim langen Drücken der unteren Taste (z.B. Helligkeit verringern).
-        Wird einmalig beim Drücken ausgeführt.
+        Wird wiederholt ausgeführt während die Taste gedrückt bleibt.
         Für Dimmen verwende: light.turn_on mit brightness_step_pct: -10
       default: []
       selector:
         action: {}
+
+    # ===== Loop Konfiguration =====
+    loop_delay_ms:
+      name: Loop Intervall (ms)
+      description: Verzögerung zwischen Loop-Wiederholungen beim langen Drücken
+      default: 250
+      selector:
+        number:
+          min: 50
+          max: 2000
+          step: 50
+          unit_of_measurement: ms
+          mode: slider
+
+    loop_max_repeats:
+      name: Maximale Loop-Wiederholungen
+      description: Sicherheitsgrenze für Loop-Durchläufe
+      default: 500
+      selector:
+        number:
+          min: 1
+          max: 2000
+          step: 1
+          mode: slider
 
     # ===== Debug =====
     debug_mode:
@@ -73,6 +97,7 @@ variables:
   command: "{{ trigger.event.data.command }}"
   args: "{{ trigger.event.data.args | default([]) }}"
   debug_mode_var: !input debug_mode
+  loop_max_repeats: !input loop_max_repeats
 
 action:
   # === Debug Logging ===
@@ -106,15 +131,27 @@ action:
       # Langer Tastendruck UP (move_with_on_off mit args[0]=0)
       - conditions:
           - condition: template
-            value_template: "{{ command == 'move_with_on_off' }}"
-          - condition: template
-            value_template: "{{ args | length > 0 and args[0] == 0 }}"
-        sequence: !input long_up_action
+            value_template: "{{ command == 'move_with_on_off' and args | length > 0 and args[0] | int == 0 }}"
+        sequence:
+          - repeat:
+              while:
+                - condition: template
+                  value_template: "{{ repeat.index <= loop_max_repeats }}"
+              sequence:
+                - sequence: !input long_up_action
+                - delay:
+                    milliseconds: !input loop_delay_ms
 
       # Langer Tastendruck DOWN (move mit args[0]=1)
       - conditions:
           - condition: template
-            value_template: "{{ command == 'move' }}"
-          - condition: template
-            value_template: "{{ args | length > 0 and args[0] == 1 }}"
-        sequence: !input long_down_action
+            value_template: "{{ command == 'move' and args | length > 0 and args[0] | int == 1 }}"
+        sequence:
+          - repeat:
+              while:
+                - condition: template
+                  value_template: "{{ repeat.index <= loop_max_repeats }}"
+              sequence:
+                - sequence: !input long_down_action
+                - delay:
+                    milliseconds: !input loop_delay_ms
