@@ -127,44 +127,50 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
-trigger:
+triggers:
   # Short Press Up (ON)
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_short_press
     subtype: turn_on
     id: short_up
 
   # Short Press Down (OFF)
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_short_press
     subtype: turn_off
     id: short_down
 
   # Long Press Up (Dim Up)
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_long_press
     subtype: dim_up
     id: long_up
 
   # Long Press Down (Dim Down)
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_long_press
     subtype: dim_down
     id: long_down
 
   # Long Release Up
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_long_release
     subtype: dim_up
     id: release_up
 
   # Long Release Down
-  - device_id: !input zha_device
+  - trigger: device
+    device_id: !input zha_device
     domain: zha
     type: remote_button_long_release
     subtype: dim_down
@@ -177,7 +183,7 @@ variables:
   # Debug Helper
   is_debug: "{{ debug_mode | default(false) | bool }}"
 
-action:
+actions:
   # Debug Logging
   - if:
       - condition: template
@@ -195,7 +201,8 @@ action:
           level: info
 
   # Optionale Bedingungen prüfen
-  - condition: !input enable_conditions
+  - condition: and
+    conditions: !input enable_conditions
 
   # Device-Trigger-basierte Aktionen
   - choose:
