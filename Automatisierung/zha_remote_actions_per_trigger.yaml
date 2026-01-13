@@ -144,6 +144,14 @@ blueprint:
           step: 1
           mode: slider
 
+    # ===== Debug =====
+    debug_mode:
+      name: Debug-Modus
+      description: Zeigt erkannte Commands im System-Log (hilft beim Troubleshooting)
+      default: false
+      selector:
+        boolean: {}
+
 mode: restart
 max_exceeded: silent
 
@@ -163,6 +171,25 @@ variables:
   cmd_release: !input command_release
 
 action:
+  # Debug Logging
+  - if:
+      - condition: template
+        value_template: "{{ debug_mode | default(false) }}"
+    then:
+      - service: system_log.write
+        data:
+          message: |
+            ZHA Remote Debug:
+            Command: {{ command }}
+            Args: {{ args }}
+            Args[0]: {{ args[0] if args | length > 0 else 'none' }}
+            Expected Long UP: {{ cmd_long_up }}
+            Expected Long DOWN: {{ cmd_long_down }}
+            Expected Release: {{ cmd_release }}
+            Match Long UP: {{ command == cmd_long_up and args | length > 0 and args[0] in [0, '0', 'MoveMode.Up'] }}
+            Match Long DOWN: {{ command == cmd_long_down and args | length > 0 and args[0] in [1, '1', 'MoveMode.Down'] }}
+          level: warning
+
   - choose:
       # === Short Press ON ===
       - conditions:
