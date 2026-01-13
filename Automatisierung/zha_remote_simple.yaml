@@ -138,7 +138,9 @@ action:
                 - condition: template
                   value_template: "{{ repeat.index <= loop_max_repeats }}"
               sequence:
-                - sequence: !input long_up_action
+                - choose:
+                    - conditions: []
+                      sequence: !input long_up_action
                 - delay:
                     milliseconds: !input loop_delay_ms
 
@@ -152,6 +154,8 @@ action:
                 - condition: template
                   value_template: "{{ repeat.index <= loop_max_repeats }}"
               sequence:
-                - sequence: !input long_down_action
+                - choose:
+                    - conditions: []
+                      sequence: !input long_down_action
                 - delay:
                     milliseconds: !input loop_delay_ms
