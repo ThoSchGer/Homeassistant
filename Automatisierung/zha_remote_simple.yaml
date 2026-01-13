@@ -137,12 +137,7 @@ action:
               while:
                 - condition: template
                   value_template: "{{ repeat.index <= loop_max_repeats }}"
-              sequence:
-                - choose:
-                    - conditions: []
-                      sequence: !input long_up_action
-                - delay:
-                    milliseconds: !input loop_delay_ms
+              sequence: !input long_up_action
 
       # Langer Tastendruck DOWN (move mit args[0]=1)
       - conditions:
@@ -153,9 +148,4 @@ action:
               while:
                 - condition: template
                   value_template: "{{ repeat.index <= loop_max_repeats }}"
-              sequence:
-                - choose:
-                    - conditions: []
-                      sequence: !input long_down_action
-                - delay:
-                    milliseconds: !input loop_delay_ms
+              sequence: !input long_down_action
