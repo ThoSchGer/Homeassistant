@@ -3,8 +3,7 @@ blueprint:
   description: >
     Universeller Blueprint für ZHA Remotes über zha_event.
     Funktioniert mit allen ZHA-Geräten, unabhängig von Device-Trigger-Support.
-    Unterstützt Short Press, Long Press mit Loop und Release.
-    Mode restart sorgt dafür, dass Long-Press-Loop bei Release stoppt.
+    Unterstützt Short Press, Long Press und Release.
   domain: automation
   source_url: https://github.com/ThoSchGer/Homeassistant/blob/main/Automatisierung/zha_remote_actions_per_trigger.yaml
 
@@ -50,7 +49,7 @@ blueprint:
     command_release:
       name: Command für Release
       description: ZHA command für Loslassen (z.B. "stop", "stop_with_on_off")
-      default: "stop"
+      default: "stop_with_on_off"
       selector:
         text:
 
@@ -69,80 +68,28 @@ blueprint:
       selector:
         action: {}
 
-    # ===== Long Press UP Aktionen =====
-    up_long_start_actions:
-      name: Long Press UP – Start
-      description: Wird einmalig beim Start des Long-Press oben ausgeführt
+    # ===== Long Press Aktionen =====
+    up_long_actions:
+      name: Long Press UP
+      description: Aktionen beim langen Drücken der oberen Taste
       default: []
       selector:
         action: {}
 
-    up_long_loop_actions:
-      name: Long Press UP – Loop
-      description: Wird während des Long-Press oben wiederholt ausgeführt
+    down_long_actions:
+      name: Long Press DOWN
+      description: Aktionen beim langen Drücken der unteren Taste
       default: []
       selector:
         action: {}
 
-    up_release_actions:
-      name: Release UP
-      description: Aktionen beim Loslassen der oberen Taste
+    # ===== Release Aktionen =====
+    release_actions:
+      name: Release
+      description: Aktionen beim Loslassen (egal ob UP oder DOWN)
       default: []
       selector:
         action: {}
-
-    # ===== Long Press DOWN Aktionen =====
-    down_long_start_actions:
-      name: Long Press DOWN – Start
-      description: Wird einmalig beim Start des Long-Press unten ausgeführt
-      default: []
-      selector:
-        action: {}
-
-    down_long_loop_actions:
-      name: Long Press DOWN – Loop
-      description: Wird während des Long-Press unten wiederholt ausgeführt
-      default: []
-      selector:
-        action: {}
-
-    down_release_actions:
-      name: Release DOWN
-      description: Aktionen beim Loslassen der unteren Taste
-      default: []
-      selector:
-        action: {}
-
-    # ===== Loop Konfiguration =====
-    loop_enabled:
-      name: Loop aktivieren
-      description: Long-Press Aktionen wiederholt ausführen
-      default: true
-      selector:
-        boolean: {}
-
-    loop_delay_ms:
-      name: Loop Intervall (ms)
-      description: Verzögerung zwischen Loop-Wiederholungen
-      default: 250
-      selector:
-        number:
-          min: 50
-          max: 2000
-          step: 50
-          unit_of_measurement: ms
-          mode: slider
-
-    loop_max_repeats:
-      name: Maximale Loop-Wiederholungen
-      description: Sicherheitsgrenze für Loop-Durchläufe
-      default: 500
-      selector:
-        number:
-          min: 1
-          max: 2000
-          step: 1
-          mode: slider
 
     # ===== Debug =====
     debug_mode:
@@ -183,11 +130,11 @@ action:
             Command: {{ command }}
             Args: {{ args }}
             Args[0]: {{ args[0] if args | length > 0 else 'none' }}
-            Expected Long UP: {{ cmd_long_up }}
-            Expected Long DOWN: {{ cmd_long_down }}
-            Expected Release: {{ cmd_release }}
+            Match Short ON: {{ command == cmd_short_on }}
+            Match Short OFF: {{ command == cmd_short_off }}
             Match Long UP: {{ command == cmd_long_up and args | length > 0 and args[0] in [0, '0', 'MoveMode.Up'] }}
             Match Long DOWN: {{ command == cmd_long_down and args | length > 0 and args[0] in [1, '1', 'MoveMode.Down'] }}
+            Match Release: {{ command == cmd_release }}
           level: warning
 
   - choose:
@@ -209,22 +156,7 @@ action:
             value_template: "{{ command == cmd_long_up }}"
           - condition: template
             value_template: "{{ args | length > 0 and args[0] in [0, '0', 'MoveMode.Up'] }}"
-        sequence:
-          - sequence: !input up_long_start_actions
-          - if:
-              - condition: template
-                value_template: "{{ loop_enabled }}"
-            then:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: "{{ repeat.index <= loop_max_repeats }}"
-                  sequence:
-                    - sequence: !input up_long_loop_actions
-                    - delay:
-                        milliseconds: !input loop_delay_ms
-            else:
-              - sequence: !input up_long_loop_actions
+        sequence: !input up_long_actions
 
       # === Long Press DOWN ===
       - conditions:
@@ -232,33 +164,10 @@ action:
             value_template: "{{ command == cmd_long_down }}"
           - condition: template
             value_template: "{{ args | length > 0 and args[0] in [1, '1', 'MoveMode.Down'] }}"
-        sequence:
-          - sequence: !input down_long_start_actions
-          - if:
-              - condition: template
-                value_template: "{{ loop_enabled }}"
-            then:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: "{{ repeat.index <= loop_max_repeats }}"
-                  sequence:
-                    - sequence: !input down_long_loop_actions
-                    - delay:
-                        milliseconds: !input loop_delay_ms
-            else:
-              - sequence: !input down_long_loop_actions
+        sequence: !input down_long_actions
 
-      # === Release (UP or DOWN) ===
+      # === Release ===
       - conditions:
           - condition: template
             value_template: "{{ command == cmd_release }}"
-        sequence:
-          - choose:
-              # Versuche zu erkennen ob UP oder DOWN basierend auf vorherigem Event
-              # In der Praxis stoppt mode:restart die Loop automatisch
-              - conditions:
-                  - condition: template
-                    value_template: "true"
-                sequence: !input up_release_actions
-            default: !input down_release_actions
+        sequence: !input release_actions

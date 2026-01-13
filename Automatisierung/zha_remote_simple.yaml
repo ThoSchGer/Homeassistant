@@ -1,0 +1,120 @@
+blueprint:
+  name: ZHA Remote – Einfach
+  description: >
+    Einfacher Blueprint für ZHA Remote Controls.
+    Unterstützt Short Press (ON/OFF) und Long Press (UP/DOWN) für Dimmen.
+    Basiert auf den tatsächlichen ZHA Events des Geräts.
+  domain: automation
+  source_url: https://github.com/ThoSchGer/Homeassistant/blob/main/Automatisierung/zha_remote_simple.yaml
+
+  input:
+    # ===== Geräteauswahl =====
+    zha_device:
+      name: ZHA Remote Gerät
+      description: Dein ZHA Remote (z.B. IKEA Tradfri, Philips Hue)
+      selector:
+        device:
+          integration: zha
+          multiple: false
+
+    # ===== Aktionen =====
+    short_on_action:
+      name: Kurzer Tastendruck ON
+      description: Aktion beim kurzen Drücken der oberen Taste (z.B. Licht einschalten)
+      default: []
+      selector:
+        action: {}
+
+    short_off_action:
+      name: Kurzer Tastendruck OFF
+      description: Aktion beim kurzen Drücken der unteren Taste (z.B. Licht ausschalten)
+      default: []
+      selector:
+        action: {}
+
+    long_up_action:
+      name: Langer Tastendruck UP
+      description: >
+        Aktion beim langen Drücken der oberen Taste (z.B. Helligkeit erhöhen).
+        Wird einmalig beim Drücken ausgeführt.
+        Für Dimmen verwende: light.turn_on mit brightness_step_pct: 10
+      default: []
+      selector:
+        action: {}
+
+    long_down_action:
+      name: Langer Tastendruck DOWN
+      description: >
+        Aktion beim langen Drücken der unteren Taste (z.B. Helligkeit verringern).
+        Wird einmalig beim Drücken ausgeführt.
+        Für Dimmen verwende: light.turn_on mit brightness_step_pct: -10
+      default: []
+      selector:
+        action: {}
+
+    # ===== Debug =====
+    debug_mode:
+      name: Debug-Modus
+      description: Zeigt alle empfangenen Events im System-Log
+      default: false
+      selector:
+        boolean: {}
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
+
+variables:
+  command: "{{ trigger.event.data.command }}"
+  args: "{{ trigger.event.data.args | default([]) }}"
+  debug_mode_var: !input debug_mode
+
+action:
+  # === Debug Logging ===
+  - if:
+      - condition: template
+        value_template: "{{ debug_mode_var }}"
+    then:
+      - service: system_log.write
+        data:
+          message: >
+            ZHA Remote Event:
+            Command: {{ command }}
+            Args: {{ args }}
+            Args[0]: {{ args[0] if args | length > 0 else 'none' }}
+          level: warning
+
+  # === Event Verarbeitung ===
+  - choose:
+      # Kurzer Tastendruck ON
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'on' }}"
+        sequence: !input short_on_action
+
+      # Kurzer Tastendruck OFF
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'off' }}"
+        sequence: !input short_off_action
+
+      # Langer Tastendruck UP (move_with_on_off mit args[0]=0)
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'move_with_on_off' }}"
+          - condition: template
+            value_template: "{{ args | length > 0 and args[0] == 0 }}"
+        sequence: !input long_up_action
+
+      # Langer Tastendruck DOWN (move mit args[0]=1)
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'move' }}"
+          - condition: template
+            value_template: "{{ args | length > 0 and args[0] == 1 }}"
+        sequence: !input long_down_action
