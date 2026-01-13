@@ -1,74 +1,94 @@
 blueprint:
-  name: ZHA Remote – Aktionen pro Event (mit Long-Press Loop)
+  name: ZHA Remote – Aktionen pro Device-Trigger (mit Long-Press Loop)
   description: >
-    Robuster Blueprint für ZHA Remotes über zha_event.
-    Pro Event (short/long/release up/down) können Sequenzen definiert werden.
+    Robuster Blueprint für ZHA Remotes über Device-Trigger.
+    Pro Trigger (short/long/release up/down) können Sequenzen definiert werden.
     Long-Press kann in einer Loop wiederholt werden, bis Release kommt (mode restart).
+    Mit Debug-Modus und optionalen Bedingungen.
+    Kompatibel mit: IKEA Tradfri, Philips Hue, Aqara und anderen ZHA Remotes.
   domain: automation
+  source_url: https://github.com/ThoSchGer/Homeassistant/blob/main/Automatisierung/zha_remote_actions_per_trigger.yaml
 
   input:
+    # ===== Geräteauswahl =====
     zha_device:
       name: ZHA Gerät
+      description: Das ZHA-Gerät (z.B. Remote, Schalter), das überwacht werden soll
       selector:
         device:
           integration: zha
+          multiple: false
 
+    # ===== Short Press Aktionen =====
     on_short_actions:
       name: Short Up (ON)
+      description: Aktionen beim kurzen Drücken der oberen Taste (z.B. Licht einschalten)
       default: []
       selector:
         action: {}
 
     off_short_actions:
       name: Short Down (OFF)
+      description: Aktionen beim kurzen Drücken der unteren Taste (z.B. Licht ausschalten)
       default: []
       selector:
         action: {}
 
+    # ===== Long Press Up Aktionen =====
     up_long_start_actions:
       name: Long Up – Start (einmalig)
+      description: Wird einmalig beim Start des Long-Press ausgeführt (z.B. Dimmen starten)
       default: []
       selector:
         action: {}
 
     up_long_loop_actions:
       name: Long Up – Loop (wiederholt)
+      description: Wird während des Long-Press wiederholt ausgeführt (z.B. Helligkeit erhöhen)
       default: []
       selector:
         action: {}
 
     up_release_actions:
       name: Release Up
+      description: Aktionen beim Loslassen der oberen Taste nach Long-Press
       default: []
       selector:
         action: {}
 
+    # ===== Long Press Down Aktionen =====
     down_long_start_actions:
       name: Long Down – Start (einmalig)
+      description: Wird einmalig beim Start des Long-Press ausgeführt (z.B. Dimmen starten)
       default: []
       selector:
         action: {}
 
     down_long_loop_actions:
       name: Long Down – Loop (wiederholt)
+      description: Wird während des Long-Press wiederholt ausgeführt (z.B. Helligkeit verringern)
       default: []
       selector:
         action: {}
 
     down_release_actions:
       name: Release Down
+      description: Aktionen beim Loslassen der unteren Taste nach Long-Press
       default: []
       selector:
         action: {}
 
+    # ===== Loop Konfiguration =====
     loop_enabled:
       name: Loop aktivieren
+      description: Long-Press Aktionen wiederholt ausführen (für Dimming etc.)
       default: true
       selector:
         boolean: {}
 
     loop_delay_ms:
       name: Loop Intervall (ms)
+      description: Verzögerung zwischen Loop-Wiederholungen (niedriger = schneller)
       default: 250
       selector:
         number:
@@ -80,6 +100,7 @@ blueprint:
 
     loop_max_repeats:
       name: Maximale Loop-Wiederholungen
+      description: Sicherheitsgrenze für Loop-Durchläufe (verhindert Endlosschleifen)
       default: 500
       selector:
         number:
@@ -88,145 +109,166 @@ blueprint:
           step: 1
           mode: slider
 
-    match_up_short:
-      name: Match Up Short (eine Zeile pro String)
-      default: "on"
+    # ===== Debug & Erweitert =====
+    debug_mode:
+      name: Debug-Modus
+      description: Aktiviert Logging für Troubleshooting (zeigt erkannte Events im Log)
+      default: false
       selector:
-        text:
-          multiline: true
+        boolean: {}
 
-    match_down_short:
-      name: Match Down Short (eine Zeile pro String)
-      default: "off"
+    enable_conditions:
+      name: Bedingungen aktivieren
+      description: Optional - Bedingungen die erfüllt sein müssen (z.B. nur nachts)
+      default: []
       selector:
-        text:
-          multiline: true
-
-    match_up_long:
-      name: Match Up Long (eine Zeile pro String)
-      default: |-
-        move_with_on_off_0_83
-        move_with_on_off_MoveMode.Up_83
-      selector:
-        text:
-          multiline: true
-
-    match_down_long:
-      name: Match Down Long (eine Zeile pro String)
-      default: |-
-        move_1_83
-        move_MoveMode.Down_83_bitmap8.0_bitmap8.0
-      selector:
-        text:
-          multiline: true
-
-    match_up_release:
-      name: Match Up Release (eine Zeile pro String)
-      default: |-
-        stop_with_on_off
-        stop
-      selector:
-        text:
-          multiline: true
-
-    match_down_release:
-      name: Match Down Release (eine Zeile pro String)
-      default: |-
-        stop_with_on_off
-        stop
-      selector:
-        text:
-          multiline: true
+        condition: {}
 
 mode: restart
 max_exceeded: silent
 
 trigger:
-  - platform: event
-    event_type: zha_event
-    event_data:
-      device_id: !input zha_device
+  # Short Press Up (ON)
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_short_press
+    subtype: turn_on
+    id: short_up
+
+  # Short Press Down (OFF)
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_short_press
+    subtype: turn_off
+    id: short_down
+
+  # Long Press Up (Dim Up)
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: dim_up
+    id: long_up
+
+  # Long Press Down (Dim Down)
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: dim_down
+    id: long_down
+
+  # Long Release Up
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: dim_up
+    id: release_up
+
+  # Long Release Down
+  - device_id: !input zha_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: dim_down
+    id: release_down
 
 variables:
-  action_str: >-
-    {{ trigger.event.data.command ~
-       ( '_' if (trigger.event.data.args is defined and (trigger.event.data.args|length > 0)) else '' ) ~
-       ( trigger.event.data.args|join('_') if (trigger.event.data.args is defined) else '' )
-    }}
-
-  up_short_list: >-
-    {{ match_up_short.splitlines() | map('trim') | reject('equalto','') | list }}
-  down_short_list: >-
-    {{ match_down_short.splitlines() | map('trim') | reject('equalto','') | list }}
-  up_long_list: >-
-    {{ match_up_long.splitlines() | map('trim') | reject('equalto','') | list }}
-  down_long_list: >-
-    {{ match_down_long.splitlines() | map('trim') | reject('equalto','') | list }}
-  up_release_list: >-
-    {{ match_up_release.splitlines() | map('trim') | reject('equalto','') | list }}
-  down_release_list: >-
-    {{ match_down_release.splitlines() | map('trim') | reject('equalto','') | list }}
+  # Trigger ID für Action-Matching
+  trigger_id: "{{ trigger.id | default('') }}"
+  
+  # Debug Helper
+  is_debug: "{{ debug_mode | default(false) | bool }}"
 
 action:
+  # Debug Logging
+  - if:
+      - condition: template
+        value_template: "{{ is_debug }}"
+    then:
+      - service: system_log.write
+        data:
+          message: |
+            ZHA Remote Device-Trigger erkannt:
+            Trigger ID: {{ trigger_id }}
+            Platform: {{ trigger.platform | default('unknown') }}
+            Device ID: {{ trigger.device_id | default('unknown') }}
+            Type: {{ trigger.type | default('unknown') }}
+            Subtype: {{ trigger.subtype | default('unknown') }}
+          level: info
+
+  # Optionale Bedingungen prüfen
+  - condition: !input enable_conditions
+
+  # Device-Trigger-basierte Aktionen
   - choose:
+      # === Short Press Up (ON) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_short_list }}"
+            value_template: "{{ trigger_id == 'short_up' }}"
         sequence: !input on_short_actions
 
+      # === Short Press Down (OFF) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_short_list }}"
+            value_template: "{{ trigger_id == 'short_down' }}"
         sequence: !input off_short_actions
 
+      # === Long Press Up (Dim Up) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_long_list }}"
+            value_template: "{{ trigger_id == 'long_up' }}"
         sequence:
+          # Start-Aktion einmalig ausführen
           - sequence: !input up_long_start_actions
+          # Loop-Logik mit verbesserter Fehlerbehandlung
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ loop_enabled | bool }}"
+                    value_template: "{{ (loop_enabled | default(false)) | bool }}"
                 sequence:
                   - repeat:
                       while:
                         - condition: template
-                          value_template: "{{ repeat.index <= (loop_max_repeats | int) }}"
+                          value_template: "{{ repeat.index <= ((loop_max_repeats | default(500)) | int) }}"
                       sequence:
                         - sequence: !input up_long_loop_actions
                         - delay:
-                            milliseconds: !input loop_delay_ms
+                            milliseconds: "{{ (loop_delay_ms | default(250)) | int }}"
             default:
+              # Einmalige Ausführung wenn Loop deaktiviert
               - sequence: !input up_long_loop_actions
 
+      # === Long Press Down (Dim Down) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_long_list }}"
+            value_template: "{{ trigger_id == 'long_down' }}"
         sequence:
+          # Start-Aktion einmalig ausführen
           - sequence: !input down_long_start_actions
+          # Loop-Logik mit verbesserter Fehlerbehandlung
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ loop_enabled | bool }}"
+                    value_template: "{{ (loop_enabled | default(false)) | bool }}"
                 sequence:
                   - repeat:
                       while:
                         - condition: template
-                          value_template: "{{ repeat.index <= (loop_max_repeats | int) }}"
+                          value_template: "{{ repeat.index <= ((loop_max_repeats | default(500)) | int) }}"
                       sequence:
                         - sequence: !input down_long_loop_actions
                         - delay:
-                            milliseconds: !input loop_delay_ms
+                            milliseconds: "{{ (loop_delay_ms | default(250)) | int }}"
             default:
+              # Einmalige Ausführung wenn Loop deaktiviert
               - sequence: !input down_long_loop_actions
 
+      # === Release Up ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_release_list }}"
+            value_template: "{{ trigger_id == 'release_up' }}"
         sequence: !input up_release_actions
 
+      # === Release Down ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_release_list }}"
+            value_template: "{{ trigger_id == 'release_down' }}"
         sequence: !input down_release_actions
