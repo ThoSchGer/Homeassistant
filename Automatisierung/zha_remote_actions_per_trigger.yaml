@@ -1,11 +1,12 @@
 blueprint:
-  name: ZHA Remote – Aktionen pro Device-Trigger (mit Long-Press Loop)
+  name: ZHA Remote – Aktionen pro Event (zha_event) (mit Long-Press Loop)
   description: >
-    Robuster Blueprint für ZHA Remotes über Device-Trigger.
-    Pro Trigger (short/long/release up/down) können Sequenzen definiert werden.
+    Robuster Blueprint für ZHA Remotes über zha_event.
+    Pro Event (short/long/release up/down) können Sequenzen definiert werden.
     Long-Press kann in einer Loop wiederholt werden, bis Release kommt (mode restart).
     Mit Debug-Modus und optionalen Bedingungen.
-    Kompatibel mit: IKEA Tradfri, Philips Hue, Aqara und anderen ZHA Remotes.
+    (Wichtig) Nutzt absichtlich zha_event, damit es auch dann funktioniert,
+    wenn das Gerät keine passenden Device-Trigger anbietet.
   domain: automation
   source_url: https://github.com/ThoSchGer/Homeassistant/blob/main/Automatisierung/zha_remote_actions_per_trigger.yaml
 
@@ -124,66 +125,100 @@ blueprint:
       selector:
         condition: {}
 
+    # ===== Event Matching Patterns =====
+    match_up_short:
+      name: Match Up Short (eine Zeile pro String)
+      description: zha_event command/args für kurzes Drücken oben (je eine Zeile)
+      default: |-
+        on
+      selector:
+        text:
+          multiline: true
+
+    match_down_short:
+      name: Match Down Short (eine Zeile pro String)
+      description: zha_event command/args für kurzes Drücken unten (je eine Zeile)
+      default: |-
+        off
+      selector:
+        text:
+          multiline: true
+
+    match_up_long:
+      name: Match Up Long (eine Zeile pro String)
+      description: zha_event command/args für langes Drücken oben (je eine Zeile)
+      default: |-
+        move_with_on_off_0_83
+        move_with_on_off_MoveMode.Up_83
+      selector:
+        text:
+          multiline: true
+
+    match_down_long:
+      name: Match Down Long (eine Zeile pro String)
+      description: zha_event command/args für langes Drücken unten (je eine Zeile)
+      default: |-
+        move_1_83
+        move_MoveMode.Down_83_bitmap8.0_bitmap8.0
+      selector:
+        text:
+          multiline: true
+
+    match_up_release:
+      name: Match Up Release (eine Zeile pro String)
+      description: zha_event command/args für Release oben (je eine Zeile)
+      default: |-
+        stop_with_on_off
+        stop
+      selector:
+        text:
+          multiline: true
+
+    match_down_release:
+      name: Match Down Release (eine Zeile pro String)
+      description: zha_event command/args für Release unten (je eine Zeile)
+      default: |-
+        stop_with_on_off
+        stop
+      selector:
+        text:
+          multiline: true
+
 mode: restart
 max_exceeded: silent
 
-triggers:
-  # Short Press Up (ON)
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_short_press
-    subtype: turn_on
-    id: short_up
-
-  # Short Press Down (OFF)
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_short_press
-    subtype: turn_off
-    id: short_down
-
-  # Long Press Up (Dim Up)
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_press
-    subtype: dim_up
-    id: long_up
-
-  # Long Press Down (Dim Down)
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_press
-    subtype: dim_down
-    id: long_down
-
-  # Long Release Up
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_release
-    subtype: dim_up
-    id: release_up
-
-  # Long Release Down
-  - trigger: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_release
-    subtype: dim_down
-    id: release_down
+trigger:
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
 
 variables:
-  # Trigger ID für Action-Matching
-  trigger_id: "{{ trigger.id | default('') }}"
-  
-  # Debug Helper
+  # Erstelle action_str aus ZHA Event (command + args)
+  action_str: >-
+    {{ (trigger.event.data.command | default('')) ~
+       ( '_' if (trigger.event.data.args is defined and (trigger.event.data.args|length > 0)) else '' ) ~
+       ( trigger.event.data.args|join('_') if (trigger.event.data.args is defined) else '' )
+    }}
+
+  up_short_list: >-
+    {{ (match_up_short | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+  down_short_list: >-
+    {{ (match_down_short | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+  up_long_list: >-
+    {{ (match_up_long | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+  down_long_list: >-
+    {{ (match_down_long | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+  up_release_list: >-
+    {{ (match_up_release | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+  down_release_list: >-
+    {{ (match_down_release | default('', true)).splitlines() | map('trim') | reject('equalto','') | list }}
+
   is_debug: "{{ debug_mode | default(false) | bool }}"
 
-actions:
+condition: !input enable_conditions
+
+action:
   # Debug Logging
   - if:
       - condition: template
@@ -192,36 +227,31 @@ actions:
       - service: system_log.write
         data:
           message: |
-            ZHA Remote Device-Trigger erkannt:
-            Trigger ID: {{ trigger_id }}
-            Platform: {{ trigger.platform | default('unknown') }}
-            Device ID: {{ trigger.device_id | default('unknown') }}
-            Type: {{ trigger.type | default('unknown') }}
-            Subtype: {{ trigger.subtype | default('unknown') }}
+            ZHA Remote zha_event erkannt:
+            Device IEEE: {{ trigger.event.data.device_ieee | default('unknown') }}
+            Command: {{ trigger.event.data.command | default('unknown') }}
+            Args: {{ trigger.event.data.args | default([]) }}
+            Action String: {{ action_str }}
           level: info
 
-  # Optionale Bedingungen prüfen
-  - condition: and
-    conditions: !input enable_conditions
-
-  # Device-Trigger-basierte Aktionen
+  # Event-basierte Aktionen
   - choose:
       # === Short Press Up (ON) ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'short_up' }}"
+            value_template: "{{ action_str in up_short_list }}"
         sequence: !input on_short_actions
 
       # === Short Press Down (OFF) ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'short_down' }}"
+            value_template: "{{ action_str in down_short_list }}"
         sequence: !input off_short_actions
 
-      # === Long Press Up (Dim Up) ===
+      # === Long Press Up ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'long_up' }}"
+            value_template: "{{ action_str in up_long_list }}"
         sequence:
           # Start-Aktion einmalig ausführen
           - sequence: !input up_long_start_actions
@@ -243,10 +273,10 @@ actions:
               # Einmalige Ausführung wenn Loop deaktiviert
               - sequence: !input up_long_loop_actions
 
-      # === Long Press Down (Dim Down) ===
+      # === Long Press Down ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'long_down' }}"
+            value_template: "{{ action_str in down_long_list }}"
         sequence:
           # Start-Aktion einmalig ausführen
           - sequence: !input down_long_start_actions
@@ -271,11 +301,11 @@ actions:
       # === Release Up ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'release_up' }}"
+            value_template: "{{ action_str in up_release_list }}"
         sequence: !input up_release_actions
 
       # === Release Down ===
       - conditions:
           - condition: template
-            value_template: "{{ trigger_id == 'release_down' }}"
+            value_template: "{{ action_str in down_release_list }}"
         sequence: !input down_release_actions
