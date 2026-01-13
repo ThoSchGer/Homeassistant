@@ -32,6 +32,40 @@ blueprint:
       selector:
         action: {}
 
+    # ===== Doppelbetätigung (Double Click) =====
+    double_press_enabled:
+      name: Doppelbetätigung aktivieren
+      description: Erkennt zwei kurze Tastendrücke innerhalb des Intervalls
+      default: true
+      selector:
+        boolean: {}
+
+    double_press_interval_ms:
+      name: Doppelbetätigung Intervall (ms)
+      description: Zeitfenster für zwei kurze Tastendrücke
+      default: 400
+      selector:
+        number:
+          min: 150
+          max: 1500
+          step: 50
+          unit_of_measurement: ms
+          mode: slider
+
+    double_on_action:
+      name: Doppelbetätigung ON
+      description: Aktion bei zweimal kurzem Drücken der oberen Taste
+      default: []
+      selector:
+        action: {}
+
+    double_off_action:
+      name: Doppelbetätigung OFF
+      description: Aktion bei zweimal kurzem Drücken der unteren Taste
+      default: []
+      selector:
+        action: {}
+
     long_up_action:
       name: Langer Tastendruck UP
       description: >
@@ -84,7 +118,7 @@ blueprint:
       selector:
         boolean: {}
 
-mode: restart
+mode: single
 max_exceeded: silent
 
 trigger:
@@ -121,6 +155,7 @@ variables:
   # Für die Richtung verwenden wir daher params.move_mode (0=UP, 1=DOWN).
   move_mode: "{{ trigger.event.data.params.move_mode | default(-1) | int }}"
   debug_mode_var: !input debug_mode
+  double_press_enabled: !input double_press_enabled
   loop_max_repeats: !input loop_max_repeats
 
 action:
@@ -144,13 +179,55 @@ action:
       - conditions:
           - condition: template
             value_template: "{{ command == 'on' }}"
-        sequence: !input short_on_action
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ double_press_enabled }}"
+            then:
+              - wait_for_trigger:
+                  - platform: event
+                    event_type: zha_event
+                    event_data:
+                      device_id: !input zha_device
+                      command: "on"
+                timeout:
+                  milliseconds: !input double_press_interval_ms
+                continue_on_timeout: true
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ wait.trigger is not none }}"
+                    sequence: !input double_on_action
+                default: !input short_on_action
+            else:
+              - sequence: !input short_on_action
 
       # Kurzer Tastendruck OFF
       - conditions:
           - condition: template
             value_template: "{{ command == 'off' }}"
-        sequence: !input short_off_action
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ double_press_enabled }}"
+            then:
+              - wait_for_trigger:
+                  - platform: event
+                    event_type: zha_event
+                    event_data:
+                      device_id: !input zha_device
+                      command: "off"
+                timeout:
+                  milliseconds: !input double_press_interval_ms
+                continue_on_timeout: true
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ wait.trigger is not none }}"
+                    sequence: !input double_off_action
+                default: !input short_off_action
+            else:
+              - sequence: !input short_off_action
 
       # Langer Tastendruck UP (move_with_on_off mit args[0]=0)
       - conditions:
