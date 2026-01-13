@@ -156,25 +156,30 @@ trigger:
 variables:
   command: "{{ trigger.event.data.command }}"
   args: "{{ trigger.event.data.args | default([]) }}"
+  cmd_short_on: !input command_short_on
+  cmd_short_off: !input command_short_off
+  cmd_long_up: !input command_long_up
+  cmd_long_down: !input command_long_down
+  cmd_release: !input command_release
 
 action:
   - choose:
       # === Short Press ON ===
       - conditions:
           - condition: template
-            value_template: "{{ command == command_short_on }}"
+            value_template: "{{ command == cmd_short_on }}"
         sequence: !input on_short_actions
 
       # === Short Press OFF ===
       - conditions:
           - condition: template
-            value_template: "{{ command == command_short_off }}"
+            value_template: "{{ command == cmd_short_off }}"
         sequence: !input off_short_actions
 
       # === Long Press UP ===
       - conditions:
           - condition: template
-            value_template: "{{ command == command_long_up }}"
+            value_template: "{{ command == cmd_long_up }}"
           - condition: template
             value_template: "{{ args | length > 0 and args[0] in [0, '0', 'MoveMode.Up'] }}"
         sequence:
@@ -197,7 +202,7 @@ action:
       # === Long Press DOWN ===
       - conditions:
           - condition: template
-            value_template: "{{ command == command_long_down }}"
+            value_template: "{{ command == cmd_long_down }}"
           - condition: template
             value_template: "{{ args | length > 0 and args[0] in [1, '1', 'MoveMode.Down'] }}"
         sequence:
@@ -220,7 +225,7 @@ action:
       # === Release (UP or DOWN) ===
       - conditions:
           - condition: template
-            value_template: "{{ command == command_release }}"
+            value_template: "{{ command == cmd_release }}"
         sequence:
           - choose:
               # Versuche zu erkennen ob UP oder DOWN basierend auf vorherigem Event
