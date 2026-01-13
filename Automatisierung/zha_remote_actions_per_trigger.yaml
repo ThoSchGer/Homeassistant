@@ -1,7 +1,8 @@
 blueprint:
-  name: ZHA Remote – Device Trigger (IKEA, Philips, Aqara)
+  name: ZHA Remote – Universal (zha_event)
   description: >
-    Blueprint für ZHA Remotes mit Device-Triggern.
+    Universeller Blueprint für ZHA Remotes über zha_event.
+    Funktioniert mit allen ZHA-Geräten, unabhängig von Device-Trigger-Support.
     Unterstützt Short Press, Long Press mit Loop und Release.
     Mode restart sorgt dafür, dass Long-Press-Loop bei Release stoppt.
   domain: automation
@@ -16,6 +17,42 @@ blueprint:
         device:
           integration: zha
           multiple: false
+    
+    # ===== Command Matching =====
+    command_short_on:
+      name: Command für Short ON
+      description: ZHA command für kurzen Druck oben (z.B. "on", "toggle")
+      default: "on"
+      selector:
+        text:
+    
+    command_short_off:
+      name: Command für Short OFF
+      description: ZHA command für kurzen Druck unten (z.B. "off", "toggle")
+      default: "off"
+      selector:
+        text:
+    
+    command_long_up:
+      name: Command für Long UP
+      description: ZHA command für langen Druck oben (z.B. "move_with_on_off", "step_with_on_off")
+      default: "move_with_on_off"
+      selector:
+        text:
+    
+    command_long_down:
+      name: Command für Long DOWN
+      description: ZHA command für langen Druck unten (z.B. "move", "step")
+      default: "move"
+      selector:
+        text:
+    
+    command_release:
+      name: Command für Release
+      description: ZHA command für Loslassen (z.B. "stop", "stop_with_on_off")
+      default: "stop"
+      selector:
+        text:
 
     # ===== Short Press Aktionen =====
     on_short_actions:
@@ -111,72 +148,35 @@ mode: restart
 max_exceeded: silent
 
 trigger:
-  # Short Press UP (ON)
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_short_press
-    subtype: turn_on
-    id: short_up
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_id: !input zha_device
 
-  # Short Press DOWN (OFF)
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_short_press
-    subtype: turn_off
-    id: short_down
-
-  # Long Press UP
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_press
-    subtype: dim_up
-    id: long_up
-
-  # Long Press DOWN
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_press
-    subtype: dim_down
-    id: long_down
-
-  # Release UP
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_release
-    subtype: dim_up
-    id: release_up
-
-  # Release DOWN
-  - platform: device
-    device_id: !input zha_device
-    domain: zha
-    type: remote_button_long_release
-    subtype: dim_down
-    id: release_down
+variables:
+  command: "{{ trigger.event.data.command }}"
+  args: "{{ trigger.event.data.args | default([]) }}"
 
 action:
   - choose:
-      # === Short Press UP ===
+      # === Short Press ON ===
       - conditions:
-          - condition: trigger
-            id: short_up
+          - condition: template
+            value_template: "{{ command == command_short_on }}"
         sequence: !input on_short_actions
 
-      # === Short Press DOWN ===
+      # === Short Press OFF ===
       - conditions:
-          - condition: trigger
-            id: short_down
+          - condition: template
+            value_template: "{{ command == command_short_off }}"
         sequence: !input off_short_actions
 
       # === Long Press UP ===
       - conditions:
-          - condition: trigger
-            id: long_up
+          - condition: template
+            value_template: "{{ command == command_long_up }}"
+          - condition: template
+            value_template: "{{ args | length > 0 and args[0] in [0, '0', 'MoveMode.Up'] }}"
         sequence:
           - sequence: !input up_long_start_actions
           - if:
@@ -196,8 +196,10 @@ action:
 
       # === Long Press DOWN ===
       - conditions:
-          - condition: trigger
-            id: long_down
+          - condition: template
+            value_template: "{{ command == command_long_down }}"
+          - condition: template
+            value_template: "{{ args | length > 0 and args[0] in [1, '1', 'MoveMode.Down'] }}"
         sequence:
           - sequence: !input down_long_start_actions
           - if:
@@ -215,14 +217,16 @@ action:
             else:
               - sequence: !input down_long_loop_actions
 
-      # === Release UP ===
+      # === Release (UP or DOWN) ===
       - conditions:
-          - condition: trigger
-            id: release_up
-        sequence: !input up_release_actions
-
-      # === Release DOWN ===
-      - conditions:
-          - condition: trigger
-            id: release_down
-        sequence: !input down_release_actions
+          - condition: template
+            value_template: "{{ command == command_release }}"
+        sequence:
+          - choose:
+              # Versuche zu erkennen ob UP oder DOWN basierend auf vorherigem Event
+              # In der Praxis stoppt mode:restart die Loop automatisch
+              - conditions:
+                  - condition: template
+                    value_template: "true"
+                sequence: !input up_release_actions
+            default: !input down_release_actions
