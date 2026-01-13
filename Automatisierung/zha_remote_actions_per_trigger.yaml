@@ -194,6 +194,9 @@ trigger:
       device_id: !input zha_device
 
 variables:
+  # Reines Command (ohne Args) – hilfreich, wenn ZHA je nach Gerät unterschiedliche Args mitsendet
+  command_only: "{{ trigger.event.data.command | default('') }}"
+
   # Erstelle action_str aus ZHA Event (command + args)
   action_str: >-
     {{ (trigger.event.data.command | default('')) ~
@@ -239,19 +242,19 @@ action:
       # === Short Press Up (ON) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_short_list }}"
+            value_template: "{{ (action_str in up_short_list) or (command_only in up_short_list) }}"
         sequence: !input on_short_actions
 
       # === Short Press Down (OFF) ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_short_list }}"
+            value_template: "{{ (action_str in down_short_list) or (command_only in down_short_list) }}"
         sequence: !input off_short_actions
 
       # === Long Press Up ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_long_list }}"
+            value_template: "{{ (action_str in up_long_list) or (command_only in up_long_list) }}"
         sequence:
           # Start-Aktion einmalig ausführen
           - sequence: !input up_long_start_actions
@@ -276,7 +279,7 @@ action:
       # === Long Press Down ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_long_list }}"
+            value_template: "{{ (action_str in down_long_list) or (command_only in down_long_list) }}"
         sequence:
           # Start-Aktion einmalig ausführen
           - sequence: !input down_long_start_actions
@@ -301,11 +304,11 @@ action:
       # === Release Up ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in up_release_list }}"
+            value_template: "{{ (action_str in up_release_list) or (command_only in up_release_list) }}"
         sequence: !input up_release_actions
 
       # === Release Down ===
       - conditions:
           - condition: template
-            value_template: "{{ action_str in down_release_list }}"
+            value_template: "{{ (action_str in down_release_list) or (command_only in down_release_list) }}"
         sequence: !input down_release_actions
