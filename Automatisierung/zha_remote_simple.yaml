@@ -156,6 +156,8 @@ variables:
   move_mode: "{{ trigger.event.data.params.move_mode | default(-1) | int }}"
   debug_mode_var: !input debug_mode
   double_press_enabled: !input double_press_enabled
+  double_press_interval_ms_var: !input double_press_interval_ms
+  loop_delay_ms_var: !input loop_delay_ms
   loop_max_repeats: !input loop_max_repeats
 
 action:
@@ -190,8 +192,7 @@ action:
                     event_data:
                       device_id: !input zha_device
                       command: "on"
-                timeout:
-                  milliseconds: !input double_press_interval_ms
+                timeout: "{{ '00:00:00.%03d' | format(double_press_interval_ms_var | int) }}"
                 continue_on_timeout: true
               - choose:
                   - conditions:
@@ -217,8 +218,7 @@ action:
                     event_data:
                       device_id: !input zha_device
                       command: "off"
-                timeout:
-                  milliseconds: !input double_press_interval_ms
+                timeout: "{{ '00:00:00.%03d' | format(double_press_interval_ms_var | int) }}"
                 continue_on_timeout: true
               - choose:
                   - conditions:
@@ -243,8 +243,7 @@ action:
                       event_data:
                         device_id: !input zha_device
                         command: "stop_with_on_off"
-                  timeout:
-                    milliseconds: !input loop_delay_ms
+                  timeout: "{{ '00:00:00.%03d' | format(loop_delay_ms_var | int) }}"
                   continue_on_timeout: true
               until:
                 - condition: template
@@ -264,8 +263,7 @@ action:
                       event_data:
                         device_id: !input zha_device
                         command: "stop_with_on_off"
-                  timeout:
-                    milliseconds: !input loop_delay_ms
+                  timeout: "{{ '00:00:00.%03d' | format(loop_delay_ms_var | int) }}"
                   continue_on_timeout: true
               until:
                 - condition: template
